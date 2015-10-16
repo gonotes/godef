@@ -10,7 +10,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/tw4452852/godef/go/token"
+	"github.com/gonotes/godef/go/token"
 )
 
 var fset = token.NewFileSet()

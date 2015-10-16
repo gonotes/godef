@@ -14,9 +14,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/tw4452852/godef/go/ast"
-	"github.com/tw4452852/godef/go/scanner"
-	"github.com/tw4452852/godef/go/token"
+	"github.com/gonotes/godef/go/ast"
+	"github.com/gonotes/godef/go/scanner"
+	"github.com/gonotes/godef/go/token"
 )
 
 // If src != nil, readSource converts src to a []byte if possible;

@@ -15,9 +15,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/tw4452852/godef/go/ast"
-	"github.com/tw4452852/godef/go/scanner"
-	"github.com/tw4452852/godef/go/token"
+	"github.com/gonotes/godef/go/ast"
+	"github.com/gonotes/godef/go/scanner"
+	"github.com/gonotes/godef/go/token"
 )
 
 var importPathPat = regexp.MustCompile(`((?:\p{L}|_)(?:\p{L}|_|\p{Nd})*)(?:\.v\d+(-unstable)?)?$`)
@@ -230,11 +230,11 @@ func (p *parser) declare1(decl ast.Node, scope *ast.Scope, kind ast.ObjKind, ide
 }
 
 func (p *parser) redeclared(ident *ast.Ident, prev *ast.Object, reason string) {
-	if f := p.fset.File(ident.Pos()); f.IsPlatformDependent() {
-		ident.Obj.Next = prev.Next
-		prev.Next = ident.Obj
-		return
-	}
+	//if f := p.fset.File(ident.Pos()); f.IsPlatformDependent() {
+	ident.Obj.Next = prev.Next
+	prev.Next = ident.Obj
+	return
+	//}
 	if p.mode&DeclarationErrors == 0 {
 		return
 	}

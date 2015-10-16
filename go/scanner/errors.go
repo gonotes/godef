@@ -9,7 +9,7 @@ import (
 	"io"
 	"sort"
 
-	"github.com/tw4452852/godef/go/token"
+	"github.com/gonotes/godef/go/token"
 )
 
 // An implementation of an ErrorHandler may be provided to the Scanner.

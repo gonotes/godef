@@ -378,7 +378,7 @@ func (s *FileSet) AddFile(filename string, base, size int) *File {
 		panic("illegal base or size")
 	}
 	// base >= s.base && size >= 0
-	f := &File{s, filename, base, size, []int{0}, nil, false}
+	f := &File{s, filename, base, size, []int{0}, nil, true}
 	base += size + 1 // +1 because EOF also has a position
 	if base < 0 {
 		panic("token.Pos offset overflow (> 2G of source code in file set)")

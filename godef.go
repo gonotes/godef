@@ -36,23 +36,6 @@ func fail(s string, a ...interface{}) {
 	os.Exit(2)
 }
 
-func init() {
-	// take GOPATH, set types.GoPath to it if it's not empty.
-	p := os.Getenv("GOPATH")
-	if p == "" {
-		return
-	}
-	gopath := strings.Split(p, ":")
-	for i, d := range gopath {
-		gopath[i] = filepath.Join(d, "src")
-	}
-	r := runtime.GOROOT()
-	if r != "" {
-		gopath = append(gopath, r+"/src/pkg")
-	}
-	types.GoPath = gopath
-}
-
 func main() {
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "usage: godef [flags] [expr]\n")
@@ -88,7 +71,7 @@ func main() {
 		src = b
 	}
 	pkgScope := ast.NewScope(parser.Universe)
-	f, err := parser.ParseFile(types.FileSet, filename, src, parser.ParseComments, pkgScope)
+	f, err := parser.ParseFile(types.FileSet, filename, src, 0, pkgScope, types.DefaultImportPathToName)
 	if f == nil {
 		fail("cannot parse %s: %v", filename, err)
 	}
@@ -113,7 +96,7 @@ func main() {
 	switch e := o.(type) {
 	case *ast.ImportSpec:
 		path := importPath(e)
-		pkg, err := build.Default.Import(path, "", build.FindOnly)
+		pkg, err := build.Default.Import(path, filepath.Dir(filename), build.FindOnly)
 		if err != nil {
 			fail("error finding import path for %s: %s", path, err)
 		}
@@ -121,16 +104,21 @@ func main() {
 	case ast.Expr:
 		if !*tflag {
 			// try local declarations only
-			if obj, typ := types.ExprType(e, types.DefaultImporter); obj != nil && typ.Kind != ast.Bad {
+			if obj, typ := types.ExprType(e, types.DefaultImporter, types.FileSet); obj != nil {
 				done(obj, typ)
 			}
 		}
 		// add declarations from other files in the local package and try again
-		pkg, err := parseLocalPackage(filename, f, pkgScope)
+		pkg, err := parseLocalPackage(filename, f, pkgScope, types.DefaultImportPathToName)
 		if pkg == nil && !*tflag {
 			fmt.Printf("parseLocalPackage error: %v\n", err)
 		}
-		if obj, typ := types.ExprType(e, types.DefaultImporter); obj != nil {
+		if flag.NArg() > 0 {
+			// Reading declarations in other files might have
+			// resolved the original expression.
+			e = parseExpr(f.Scope, flag.Arg(0)).(ast.Expr)
+		}
+		if obj, typ := types.ExprType(e, types.DefaultImporter, types.FileSet); obj != nil {
 			done(obj, typ)
 		}
 		fail("no declaration found for %v", pretty{e})
@@ -235,7 +223,7 @@ func done(obj *ast.Object, typ types.Type) {
 	fmt.Printf("%s\n", strings.Replace(typeStr(obj, typ), "\n", "\n\t", -1))
 	if *aflag || *Aflag {
 		var m orderedObjects
-		for obj := range typ.Iter(types.DefaultImporter) {
+		for obj := range typ.Iter() {
 			m = append(m, obj)
 		}
 		sort.Sort(m)
@@ -246,7 +234,7 @@ func done(obj *ast.Object, typ types.Type) {
 			}
 			id := ast.NewIdent(obj.Name)
 			id.Obj = obj
-			_, mt := types.ExprType(id, types.DefaultImporter)
+			_, mt := types.ExprType(id, types.DefaultImporter, types.FileSet)
 			fmt.Printf("\t%s\n", strings.Replace(typeStr(obj, mt), "\n", "\n\t\t", -1))
 			fmt.Printf("\t\t%v\n", types.FileSet.Position(types.DeclPos(obj)))
 		}
@@ -267,14 +255,14 @@ func typeStr(obj *ast.Object, typ types.Type) string {
 	case ast.Lbl:
 		return fmt.Sprintf("label %s", obj.Name)
 	case ast.Typ:
-		typ = typ.Underlying(false, types.DefaultImporter)
+		typ = typ.Underlying(false)
 		return fmt.Sprintf("type %s %v", obj.Name, prettyType{typ})
 	}
 	return fmt.Sprintf("unknown %s %v", obj.Name, typ.Kind)
 }
 
 func parseExpr(s *ast.Scope, expr string) ast.Expr {
-	n, err := parser.ParseExpr(types.FileSet, "<arg>", expr, s)
+	n, err := parser.ParseExpr(types.FileSet, "<arg>", expr, s, types.DefaultImportPathToName)
 	if err != nil {
 		fail("cannot parse expression: %v", err)
 	}
@@ -302,7 +290,7 @@ var errNoPkgFiles = errors.New("no more package files found")
 // the principal source file, except the original source file
 // itself, which will already have been parsed.
 //
-func parseLocalPackage(filename string, src *ast.File, pkgScope *ast.Scope) (*ast.Package, error) {
+func parseLocalPackage(filename string, src *ast.File, pkgScope *ast.Scope, pathToName parser.ImportPathToName) (*ast.Package, error) {
 	pkg := &ast.Package{src.Name.Name, pkgScope, nil, map[string]*ast.File{filename: src}}
 	d, f := filepath.Split(filename)
 	if d == "" {
@@ -326,7 +314,7 @@ func parseLocalPackage(filename string, src *ast.File, pkgScope *ast.Scope) (*as
 			pkgName(file) != pkg.Name {
 			continue
 		}
-		src, err := parser.ParseFile(types.FileSet, file, nil, parser.ParseComments, pkg.Scope)
+		src, err := parser.ParseFile(types.FileSet, file, nil, 0, pkg.Scope, types.DefaultImportPathToName)
 		if err == nil {
 			pkg.Files[file] = src
 		}
@@ -341,7 +329,7 @@ func parseLocalPackage(filename string, src *ast.File, pkgScope *ast.Scope) (*as
 // go source filename.
 //
 func pkgName(filename string) string {
-	prog, _ := parser.ParseFile(types.FileSet, filename, nil, parser.PackageClauseOnly, nil)
+	prog, _ := parser.ParseFile(types.FileSet, filename, nil, parser.PackageClauseOnly, nil, types.DefaultImportPathToName)
 	if prog != nil {
 		return prog.Name.Name
 	}
